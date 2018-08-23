@@ -9,12 +9,14 @@ from sqlalchemy.orm import sessionmaker
 
 import models
 import opencare
+import yelp
 
 
 STOP_FLAG = False
 
 SCRAPERS = {
-    'opencare': opencare
+    'opencare': opencare,
+    'yelp': yelp
 }
 
 SEMAPHORE_DB = asyncio.Semaphore(value=1)
@@ -130,22 +132,6 @@ async def create_default_data():
 
 def main():
     asyncio.get_event_loop().run_until_complete(create_default_data())
-    # asyncio.get_event_loop().run_until_complete(populate({
-    #     'name': 'google',
-    #     'logo': 'www.google.com',
-    #     'website': 'www.google.com',
-    #     'region': 'ontario',
-    #     'city': 'toronto',
-    #     'category': 'chiropractors',
-    #     'street': 'test street, 24',
-    #     'about': 'example text',
-    #     'phone': None,
-    #     'rating': {
-    #         'stars': Decimal('5.0'),
-    #         'reviews': None
-    #     }
-    # }))
-
     loop = asyncio.get_event_loop()
     loop.run_until_complete(scrape(
         site='opencare',
