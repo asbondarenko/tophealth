@@ -1,0 +1,8 @@
+# Created by .ignore support plugin (hsz.mobi)
+.idea/
+cache/
+repository/__pycache__/
+repository/versions/__pycache__/
+venv/
+
+project.txt
