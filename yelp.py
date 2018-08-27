@@ -136,10 +136,10 @@ async def extract_info(session, url):
         stars = None
 
     # Reviews Sources
-    if 'review' in json_data:
-        reviews = len(json_data['review'])
+    if 'reviewCount' in json_data:
+        reviews = json_data['reviewCount']
     else:
-        reviews = None
+        reviews = 0
 
     yield 'business', {
         'name': name,
@@ -173,7 +173,7 @@ async def start_tasks(start_task):
     tasks = [start_task]
 
     new_session = BrowserFactory(
-        headless=False,
+        headless=True,
         disable_images=True
     )
 
@@ -206,6 +206,10 @@ async def start_tasks(start_task):
 
 
 async def scrape(callback, region, city, category):
+    region = region['name']
+    city = city['name']
+    category = category['name']
+
     task = {
         'type': 'search',
         'url': f'https://www.yelp.com/search?find_desc={category}&find_loc={city},+{region}&sortby=rating&start=0'

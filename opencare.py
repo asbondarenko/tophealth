@@ -1,6 +1,7 @@
 import asyncio
 import os
 import random
+import re
 import string
 from pprint import pprint
 
@@ -148,7 +149,10 @@ async def extract_info(session, url):
                 continue
 
             reviews_element = await panel_title.get_element('.hidden-xs')
-            reviews = await reviews_element.get_text()
+            reviews_text = (await reviews_element.get_text()).strip()
+
+            reviews_text = re.match(r'Based on +(\d+) +review', reviews_text).group(1)
+            reviews = int(reviews_text)
             break
 
         except arsenic.errors.NoSuchElement:
@@ -186,7 +190,7 @@ async def start_tasks(start_task):
     tasks = [start_task]
 
     new_session = BrowserFactory(
-        headless=False,
+        headless=True,
         disable_images=True
     )
 
@@ -219,24 +223,19 @@ async def start_tasks(start_task):
 
 
 async def scrape(callback, region, city, category):
-    if (region, city, category) == ('ontario', 'toronto', 'chiropractors'):
-        task = {
-            'type': 'search',
-            'url': 'https://www.opencare.com/chiropractors/toronto-on/'
-        }
-    elif (region, city, category) == ('new-york', 'new-york', 'chiropractors'):
-        task = {
-            'type': 'search',
-            'url': 'https://www.opencare.com/chiropractors/new-york-ny/'
-        }
-    else:
-        raise NotImplementedError
+    if category['opencare_name'] is None:
+        return
+
+    task = {
+        'type': 'search',
+        'url': f'https://www.opencare.com/{category["opencare_name"]}/{city["name"].lower()}-{region["code"].lower()}/'
+    }
 
     async for business in start_tasks(task):
         business.update({
-            'city': city,
-            'region': region,
-            'category': category
+            'city': city['name'],
+            'region': region['name'],
+            'category': category['name']
         })
         await callback(business)
 
