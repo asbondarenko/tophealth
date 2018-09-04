@@ -31,11 +31,20 @@ session_maker = sessionmaker(bind=session_engine)
 session = session_maker()
 
 
+async def get_source_category(source, category):
+    async with SEMAPHORE_DB:
+        return session.query(models.CategoryName).filter(
+            models.CategoryName.source == source,
+            models.CategoryName.category == category
+        ).first()
+
+
 async def populate(business):
     async with SEMAPHORE_DB:
-        categories = (
-            session.query(models.Category).filter(
-                models.Category.name.in_(business['categories'])
+        source_categories = (
+            session.query(models.CategoryName).filter(
+                models.CategoryName.source == business['source'],
+                models.CategoryName.name.in_(business['categories'])
             )
         ).all()
 
@@ -79,8 +88,8 @@ async def populate(business):
             )
             session.add(facility)
 
-        for category in categories:
-            facility.categories.append(category)
+        for source_category in source_categories:
+            facility.categories.append(source_category.category)
 
         facility_info = models.FacilityInfo(
             facility=facility,
@@ -180,6 +189,9 @@ async def scrape(source, category, city):
 
 async def scrape_reviews(source, category, city, facilities):
     async with SEMAPHORE_REVIEW:
+        source_category = await get_source_category(source, category)
+        if source_category is None:
+            return
 
         scraper = REVIEW_SOURCES[source]
 
@@ -200,7 +212,7 @@ async def scrape_reviews(source, category, city, facilities):
             callback=append_review,
 
             category={
-                'name': category.name,
+                'name': source_category.name
             },
             country={
                 'name': city.region.country.name,

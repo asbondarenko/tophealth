@@ -1,3 +1,5 @@
+import sqlalchemy.exc
+
 import models
 
 
@@ -15,45 +17,45 @@ PLACES = [
 ]
 
 CATEGORIES = [
-    'Acupuncture',
-    'Allergists',
-    'Audiologists',
-    'Cardiologists',
-    'Chiropractors',
-    'Cosmetic Surgeons',
-    'Dentists',
-    'Dermatologists',
-    'Ear Nose and Throat (ENT) Doctors',
-    'Endocrinologists',
-    'Endodontists',
-    'Family Doctors',
-    'Gastroenterologists',
-    'Gynecologists',
-    'Homeopath',
-    'Massage therapy',
-    'Naturopath',
-    'Nephrologists',
-    'Neurologists',
-    'Neurosurgeons',
-    'Occupational Therapy',
-    'Oncologists',
-    'Ophthalmologists',
-    'Optometrists',
-    'Oral Surgeons',
-    'Orthodontists',
-    'Orthopedics',
-    'Pediatricians',
-    'Physical therapy',
-    'Podiatrists',
-    'Proctologists',
-    'Psychiatrists',
-    'Psychologists',
-    'Pulmonologists',
-    'Rheumatologists',
-    'Sleep Doctors',
-    'Surgeons',
-    'Therapists',
-    'Urologist'
+    ('Acupuncture', 'Acupuncture', 'acupuncturists'),
+    ('Allergists', 'Allergists', None),
+    ('Audiologists', 'Audiologist', 'audiologists'),
+    ('Cardiologists', 'Cardiologists', None),
+    ('Chiropractors', 'Chiropractors', 'chiropractors'),
+    ('Cosmetic Surgeons', 'Cosmetic Surgeons', None),
+    ('Dentists', 'Dentists', 'dentists'),
+    ('Dermatologists', 'Dermatologists', 'dermatologists'),
+    ('Ear Nose and Throat (ENT) Doctors', 'Ear Nose & Throat', None),
+    ('Endocrinologists', None, 'endocrinologists'),
+    ('Endodontists', 'Endodontists', 'endodontists'),
+    ('Family Doctors', 'Family Practice', 'family-doctors'),
+    ('Gastroenterologists', 'Gastroenterologist', None),
+    ('Gynecologists', 'Obstetricians & Gynecologists', None),
+    ('Homeopath', None, 'homeopaths'),
+    ('Massage therapy', 'Massage Therapy', None),
+    ('Naturopath', 'Naturopathic/Holistic', 'naturopaths'),
+    ('Nephrologists', 'Nephrologists', None),
+    ('Neurologists', 'Neurologist', None),
+    ('Neurosurgeons', None,  None),
+    ('Occupational Therapy', 'Occupational Therapy',  'occupational-therapists'),
+    ('Oncologists', 'Oncologist', None),
+    ('Ophthalmologists', 'Ophthalmologists', 'ophthalmologists'),
+    ('Optometrists', 'Optometrists', 'optometrists'),
+    ('Oral Surgeons', 'Oral Surgeons', 'oral-surgeons'),
+    ('Orthodontists', 'Orthodontists', 'orthodontists'),
+    ('Orthopedics', 'Orthopedists', 'orthopedic-surgeons'),
+    ('Pediatricians', 'Pediatricians', 'pediatricians'),
+    ('Physical therapy', 'Physical Therapy', 'physical-therapists'),
+    ('Podiatrists', 'Podiatrists', 'podiatrists'),
+    ('Proctologists', None, 'psychiatrists'),
+    ('Psychiatrists', 'Psychiatrists', 'psychologists'),
+    ('Psychologists', 'Psychologists', None),
+    ('Pulmonologists', 'Pulmonologist', None),
+    ('Rheumatologists', 'Rheumatologists', None),
+    ('Sleep Doctors', 'Sleep Specialists', None),
+    ('Surgeons', 'Surgeons', None),
+    ('Therapists', None, None),
+    ('Urologist', 'Urologists', None)
 ]
 
 
@@ -108,17 +110,39 @@ def create_data(session):
 
         return country
 
-    def create_category(name):
+    def create_category(name, yelp_name, opencare_name):
         category = session.query(models.Category).filter(
             models.Category.name == name,
         ).first()
 
         if category is None:
             category = models.Category(
-                name=name,
+                name=name
             )
             session.add(category)
             session.commit()
+
+        if yelp_name is not None:
+            session.add(models.CategoryName(
+                source='yelp',
+                name=yelp_name,
+                category=category
+            ))
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()
+
+        if opencare_name is not None:
+            session.add(models.CategoryName(
+                source='opencare',
+                name=opencare_name,
+                category=category
+            ))
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()
 
         return category
 
@@ -133,8 +157,8 @@ def create_data(session):
                     create_city(region.id, city_name)
 
     def create_categories(categories):
-        for category_name in categories:
-            create_category(category_name)
+        for category_names in categories:
+            create_category(*category_names)
 
     create_places(PLACES)
     create_categories(CATEGORIES)

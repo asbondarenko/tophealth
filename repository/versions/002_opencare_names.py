@@ -16,5 +16,5 @@ def downgrade(migrate_engine):
     # Operations to reverse the above upgrade go here.
     meta = MetaData(bind=migrate_engine)
 
-    account = Table('category', meta, autoload=True)
-    account.c.opencare_name.drop()
+    category = Table('category', meta, autoload=True)
+    category.c.opencare_name.drop()

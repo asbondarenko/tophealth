@@ -22,6 +22,21 @@ class Category(Model):
     name = Column(String(64), nullable=False)
 
     facilities = relationship("Facility", lazy='dynamic', secondary=facility_category, back_populates='categories')
+    category_names = relationship("CategoryName", lazy='dynamic', back_populates='category')
+
+
+class CategoryName(Model):
+    __tablename__ = 'category_name'
+    __table_args__ = (
+        UniqueConstraint('source', 'name', name='category_name_uc'),
+    )
+
+    id = Column(Integer, Sequence('category_name_id_seq'), primary_key=True)
+    source = Column(String(32), nullable=False)
+    name = Column(String(64), nullable=False)
+
+    category_id = Column(Integer, ForeignKey("category.id"))
+    category = relationship("Category", back_populates="category_names")
 
 
 class Country(Model):
