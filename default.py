@@ -15,45 +15,45 @@ PLACES = [
 ]
 
 CATEGORIES = [
-    ("Acupuncture", "acupuncturists"),
-    ("Allergists", None),
-    ("Audiologists", "audiologists"),
-    ("Cardiologists", None),
-    ("Chiropractors", "chiropractors"),
-    ("Cosmetic Surgeons", None),
-    ("Dentists", "dentists"),
-    ("Dermatologists", "dermatologists"),
-    ("Ear Nose and Throat (ENT) Doctors", None),
-    ("Endocrinologists", "endocrinologists"),
-    ("Endodontists", "endodontists"),
-    ("Family Doctors", "family-doctors"),
-    ("Gastroenterologists", None),
-    ("Gynecologists", None),
-    ("Homeopath", "homeopaths"),
-    ("Massage therapy", None),
-    ("Naturopath", "naturopaths"),
-    ("Nephrologists", None),
-    ("Neurologists", None),
-    ("Neurosurgeons", None),
-    ("Occupational Therapy", "occupational-therapists"),
-    ("Oncologists", None),
-    ("Ophthalmologists", "ophthalmologists"),
-    ("Optometrists", "optometrists"),
-    ("Oral Surgeons", "oral-surgeons"),
-    ("Orthodontists", "orthodontists"),
-    ("Orthopedics", "orthopedic-surgeons"),
-    ("Pediatricians", "pediatricians"),
-    ("Physical therapy", "physical-therapists"),
-    ("Podiatrists", "podiatrists"),
-    ("Proctologists", None),
-    ("Psychiatrists", "psychiatrists"),
-    ("Psychologists", "psychologists"),
-    ("Pulmonologists", None),
-    ("Rheumatologists", None),
-    ("Sleep Doctors", None),
-    ("Surgeons", "plastic-surgeons"),
-    ("Therapists", None),
-    ("Urologist", None),
+    'Acupuncture',
+    'Allergists',
+    'Audiologists',
+    'Cardiologists',
+    'Chiropractors',
+    'Cosmetic Surgeons',
+    'Dentists',
+    'Dermatologists',
+    'Ear Nose and Throat (ENT) Doctors',
+    'Endocrinologists',
+    'Endodontists',
+    'Family Doctors',
+    'Gastroenterologists',
+    'Gynecologists',
+    'Homeopath',
+    'Massage therapy',
+    'Naturopath',
+    'Nephrologists',
+    'Neurologists',
+    'Neurosurgeons',
+    'Occupational Therapy',
+    'Oncologists',
+    'Ophthalmologists',
+    'Optometrists',
+    'Oral Surgeons',
+    'Orthodontists',
+    'Orthopedics',
+    'Pediatricians',
+    'Physical therapy',
+    'Podiatrists',
+    'Proctologists',
+    'Psychiatrists',
+    'Psychologists',
+    'Pulmonologists',
+    'Rheumatologists',
+    'Sleep Doctors',
+    'Surgeons',
+    'Therapists',
+    'Urologist'
 ]
 
 
@@ -108,7 +108,7 @@ def create_data(session):
 
         return country
 
-    def create_category(name, opencare_name):
+    def create_category(name):
         category = session.query(models.Category).filter(
             models.Category.name == name,
         ).first()
@@ -116,7 +116,6 @@ def create_data(session):
         if category is None:
             category = models.Category(
                 name=name,
-                opencare_name=opencare_name
             )
             session.add(category)
             session.commit()
@@ -134,8 +133,8 @@ def create_data(session):
                     create_city(region.id, city_name)
 
     def create_categories(categories):
-        for category_name, opencare_name in categories:
-            create_category(category_name, opencare_name)
+        for category_name in categories:
+            create_category(category_name)
 
     create_places(PLACES)
     create_categories(CATEGORIES)

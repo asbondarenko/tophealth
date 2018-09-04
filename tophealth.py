@@ -9,16 +9,22 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import models
-import opencare
 import yelp
 import default
+from reviews import opencare
+
 
 SOURCES = {
-    'opencare': opencare,
-    'yelp': yelp
+    'yelp': yelp,
+}
+
+REVIEW_SOURCES = {
+    'opencare': opencare
 }
 
 SEMAPHORE_DB = asyncio.Semaphore(value=1)
+SEMAPHORE_SCRAPE = asyncio.Semaphore(value=5)
+SEMAPHORE_REVIEW = asyncio.Semaphore(value=5)
 
 session_engine = create_engine('sqlite:///tophealth.db')
 session_maker = sessionmaker(bind=session_engine)
@@ -27,39 +33,38 @@ session = session_maker()
 
 async def populate(business):
     async with SEMAPHORE_DB:
-        try:
-            category = (
-                session.query(models.Category).filter(
-                    models.Category.name == business['category'],
-                )
-            ).one()
-
-        except sqlalchemy.orm.exc.NoResultFound:
-            print(f"Unknown category {business['category']}")
-            return False
+        categories = (
+            session.query(models.Category).filter(
+                models.Category.name.in_(business['categories'])
+            )
+        ).all()
 
         try:
+            filter_expressions = []
+            if 'name' in business['location']['region']:
+                filter_expressions.append(models.Region.name == business['location']['region']['name'])
+            if 'code' in business['location']['region']:
+                filter_expressions.append(models.Region.code == business['location']['region']['code'])
+
             region_id, = (
                 session.query(models.Region.id)
-                .filter(
-                    models.Region.name == business['region']
-                )
+                .filter(sqlalchemy.or_(*filter_expressions))
             ).one()
 
         except sqlalchemy.orm.exc.NoResultFound:
-            print(f"Unknown region {business['region']}")
+            print(f"Unknown region {business['location']['region']}")
             return False
 
         try:
             city_id, = (
                 session.query(models.City.id).filter(
-                    models.City.name == business['city'],
+                    models.City.name == business['location']['city'],
                     models.City.region_id == region_id,
                 )
             ).one()
 
         except sqlalchemy.orm.exc.NoResultFound:
-            print(f"Unknown city {business['city']}, {business['region']}")
+            print(f"Unknown city {business['location']['city']}, {business['location']['region']}")
             return False
 
         facility = session.query(models.Facility).filter(
@@ -74,55 +79,145 @@ async def populate(business):
             )
             session.add(facility)
 
-        facility.categories.append(category)
+        for category in categories:
+            facility.categories.append(category)
 
         facility_info = models.FacilityInfo(
             facility=facility,
             fetch_date=datetime.datetime.now(datetime.timezone.utc),
             source=business['source'],
-            about=business['about'],
-            address=business['street'],
+
             image_url=business['logo'],
             phone=business['phone'],
+            website_url=business['website'],
+            address=business['address'],
+
+            about=business['about'],
+
             rating_stars=business['rating']['stars'],
-            reviews_count=business['rating']['reviews'],
-            website_url=business['website']
+            reviews_count=business['rating']['count'],
         )
         session.add(facility_info)
+
+        for review_data in business['reviews']:
+            session.add(models.Review(
+                facility=facility,
+                author=review_data['author'],
+                content=review_data['content'],
+                rating=review_data['rating'],
+            ))
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()
 
         try:
             session.commit()
         except sqlalchemy.exc.IntegrityError:
+            session.rollback()
             return False
 
     return True
 
 
+async def populate_reviews(review_data):
+    async with SEMAPHORE_DB:
+        try:
+            existed_review = session.query(models.Review).filter(
+                models.Review.facility_id == review_data['facility_id'],
+                models.Review.content == f"@{review_data['source']}: generic review"
+            ).one()
+            existed_review.rating = review_data['rating']
+            existed_review.multiplier = review_data['count']
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()
+
+        except sqlalchemy.orm.exc.NoResultFound:
+            session.add(models.Review(
+                facility_id=review_data['facility_id'],
+                author=review_data['source'],
+                content=f"@{review_data['source']}: generic review",
+                rating=review_data['stars'],
+                multiplier=review_data['count'],
+            ))
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()
+
+
 async def scrape(source, category, city):
-    scraper = SOURCES[source]
+    async with SEMAPHORE_SCRAPE:
+        scraper = SOURCES[source]
 
-    category = {
-        'name': category.name,
-        'opencare_name': category.opencare_name
-    }
-    region = {
-        'name': city.region.name,
-        'code': city.region.code
-    }
-    city = {
-        'name': city.name
-    }
+        async def append_facility(business):
+            business.update({
+                'source': source
+            })
+            await populate(business)
 
-    async def append_facility(business):
-        business.update({
-            'source': source
-        })
-        await populate(business)
+        await scraper.scrape(
+            callback=append_facility,
 
-    await scraper.scrape(append_facility, region, city, category)
+            category={
+                'name': category.name,
+            },
+            country={
+                'name': city.region.country.name,
+                'code': city.region.country.code
+            },
+            region={
+                'name': city.region.name,
+                'code': city.region.code
+            },
+            city={
+                'name': city.name
+            }
+        )
 
 
-def generate_result():
+async def scrape_reviews(source, category, city, facilities):
+    async with SEMAPHORE_REVIEW:
+
+        scraper = REVIEW_SOURCES[source]
+
+        async def append_review(review):
+            for facility in facilities:
+                if facility.name == review['facility_name']:
+                    review.update({
+                        'facility_id': facility.id
+                    })
+                    break
+
+            review.update({
+                'source': source,
+            })
+            await populate_reviews(review)
+
+        await scraper.scrape_reviews(
+            callback=append_review,
+
+            category={
+                'name': category.name,
+            },
+            country={
+                'name': city.region.country.name,
+                'code': city.region.country.code
+            },
+            region={
+                'name': city.region.name,
+                'code': city.region.code
+            },
+            city={
+                'name': city.name
+            },
+            clinic_names={facility.name for facility in facilities}
+        )
+
+
+def generate_result(city_name=None, region_name=None, country_name=None, categories=None):
     last_fetch = (
         session.query(
             models.FacilityInfo.facility_id.label('facility_id'),
@@ -138,18 +233,57 @@ def generate_result():
     query = (
         session.query(models.Facility, models.FacilityInfo).select_from(
             sqlalchemy.join(
-                models.Facility,
+                models.Country,
                 sqlalchemy.join(
-                    models.FacilityInfo, last_fetch,
-                    models.FacilityInfo.facility_id == last_fetch.c.facility_id
+                    models.Region,
+                    sqlalchemy.join(
+                        models.City,
+                        sqlalchemy.join(
+                            models.Facility,
+                            sqlalchemy.join(
+                                models.FacilityInfo, last_fetch,
+                                models.FacilityInfo.facility_id == last_fetch.c.facility_id
+                            ),
+                            models.Facility.id == models.FacilityInfo.facility_id
+                        ),
+                        models.Facility.city_id == models.City.id
+                    ),
+                    models.City.region_id == models.Region.id
                 ),
-                models.Facility.id == models.FacilityInfo.facility_id
-            )
+                models.Region.country_id == models.Country.id
+            ),
         )
         .filter(models.FacilityInfo.fetch_date == last_fetch.c.fetch_date)
         .filter(models.FacilityInfo.source.in_(list(SOURCES)))
         .order_by(sqlalchemy.asc(models.Facility.id))
     )
+
+    if city_name is not None:
+        query = query.filter(
+            models.City.name == city_name
+        )
+
+    if region_name is not None:
+        query = query.filter(
+            sqlalchemy.or_(
+                models.Region.name == region_name,
+                models.Region.code == region_name
+            )
+        )
+
+    if country_name is not None:
+        query = query.filter(
+            sqlalchemy.or_(
+                models.Country.name == country_name,
+                models.Country.code == country_name
+            )
+        )
+
+    if categories is not None and len(categories) > 0:
+        # noinspection PyUnresolvedReferences
+        query = query.filter(
+            models.Facility.categories.any(models.Category.name.in_(categories))
+        )
 
     facilities = {}
     for facility, facility_info in query.all():
@@ -165,13 +299,19 @@ def generate_result():
                 'categories': [
                     category.name for category in facility.categories
                 ],
-                'info': []
+                'info': [],
+                'total_reviews': 0,
+                'total_rating': 0,
             }
-            facilities[facility.id] = result
 
-        rating_stars = facility_info.rating_stars
-        if rating_stars is not None:
-            rating_stars = float(rating_stars)
+            for review in facility.reviews:
+                result['total_rating'] += float(review.rating) * review.multiplier
+                result['total_reviews'] += review.multiplier
+
+            if result['total_reviews'] > 0:
+                result['total_rating'] /= result['total_reviews']
+
+            facilities[facility.id] = result
 
         result['info'].append({
             'source': facility_info.source,
@@ -179,63 +319,119 @@ def generate_result():
             'phone': facility_info.phone,
             'address': facility_info.address,
             'image_url': facility_info.image_url,
-            'rating_stars': rating_stars,
-            'reviews': facility_info.reviews_count,
             'website_url': facility_info.website_url
         })
 
-    for facility in facilities.values():
-        total_reviews = 0
-        total_rating = 0.0
-        source_count = 0
-        for info in facility['info']:
-            # noinspection PyTypeChecker
-            rating_part = info['rating_stars']
-
-            if rating_part is not None:
-                total_rating += float(rating_part)
-                source_count += 1
-
-            # noinspection PyTypeChecker
-            total_reviews += info['reviews']
-
-        facility['total_reviews'] = total_reviews
-        facility['total_rating'] = 0
-        if source_count > 0:
-            facility['total_rating'] = total_rating / source_count
-
-    return list(sorted(facilities.values(), key=lambda x: -x['total_rating']))
+    return list(sorted(facilities.values(), key=lambda x: (-x['total_rating'], -x['total_reviews'])))
 
 
 def main():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='mode')
-    init_parser = subparsers.add_parser('init')
+    subparsers.add_parser('init')
+
     scrape_parser = subparsers.add_parser('scrape')
+    scrape_parser.add_argument('source', choices=list(SOURCES))
+    scrape_parser.add_argument('--city', help="City for scraping")
+    scrape_parser.add_argument('--region', help="Region for scraping")
+    scrape_parser.add_argument('--country', help="Country for scraping")
+    scrape_parser.add_argument('--categories', nargs='*', help="List of categories")
+
+    review_parser = subparsers.add_parser('reviews')
+    review_parser.add_argument('source', choices=list(REVIEW_SOURCES))
+    review_parser.add_argument('--city', help="City for scraping")
+    review_parser.add_argument('--region', help="Region for scraping")
+    review_parser.add_argument('--country', help="Country for scraping")
+    review_parser.add_argument('--categories', nargs='*', help="List of categories")
+
     result_parser = subparsers.add_parser('result')
+    result_parser.add_argument('city', help="City for results")
+    result_parser.add_argument('--region', help="Region for results")
+    result_parser.add_argument('--country', help="Country for results")
+    result_parser.add_argument('--categories', nargs='*', help="List of categories")
 
     args = parser.parse_args()
 
     if args.mode == 'init':
         default.create_data(session)
 
-    if args.mode == 'scrape':
-        loop = asyncio.get_event_loop()
-        cities = session.query(models.City).all()
-        categories = session.query(models.Category).all()
+    if args.mode == 'scrape' or args.mode == 'reviews':
+        cities_query = session.query(models.City).select_from(
+            sqlalchemy.join(
+                models.Country,
+                sqlalchemy.join(
+                    models.Region,
+                    models.City,
+                    models.City.region_id == models.Region.id
+                ),
+                models.Region.country_id == models.Country.id
+            )
+        )
 
-        for city in cities:
-            for category in categories:
-                for source in SOURCES:
-                    loop.run_until_complete(scrape(
-                        source=source,
+        city_name = args.city
+        if city_name is not None:
+            cities_query = cities_query.filter(
+                models.City.name == city_name
+            )
+
+        region_name = args.region
+        if region_name is not None:
+            cities_query = cities_query.filter(
+                sqlalchemy.or_(
+                    models.Region.name == region_name,
+                    models.Region.code == region_name
+                )
+            )
+
+        country_name = args.country
+        if country_name is not None:
+            cities_query = cities_query.filter(
+                sqlalchemy.or_(
+                    models.Country.name == country_name,
+                    models.Country.code == country_name
+                )
+            )
+
+        categories_query = session.query(models.Category)
+        if args.categories is not None and len(args.categories) > 0:
+            categories_query = categories_query.filter(
+                models.Category.name.in_(args.categories)
+            )
+
+        cities = cities_query.all()
+        categories = categories_query.all()
+
+        if args.mode == 'scrape':
+            scrapers = []
+            for city in cities:
+                for category in categories:
+                    scrapers.append(scrape(
+                        source=args.source,
                         category=category,
                         city=city
                     ))
 
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.gather(*scrapers))
+
+        else:
+            scrapers = []
+            for city in cities:
+                for category in categories:
+                    facilities = category.facilities.filter(models.Facility.city == city).all()
+                    scrapers.append(scrape_reviews(
+                        source=args.source,
+                        category=category,
+                        city=city,
+                        facilities=facilities
+                    ))
+
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.gather(*scrapers))
+
     if args.mode == 'result':
         print(json.dumps(indent=4, obj={
-            'facilities': generate_result()
+            'facilities': generate_result(args.city, args.region, args.country, args.categories)
         }))
 
 

@@ -1,234 +1,186 @@
 import asyncio
 import json
-import os
 import random
-import re
-import string
+import traceback
 from pprint import pprint
+from urllib.parse import urljoin
 
-import arsenic
-import arsenic.errors
-from arsenic.browsers import Chrome
-from arsenic.services import Chromedriver
-
-from bs4 import BeautifulSoup
+import aiohttp
+import bs4
 
 
-class BrowserFactory:
-    def __init__(self, headless=True, proxy_address=None, disable_images=False, windows_size=(1200, 600)):
-        options = {
-            'args': [
-                'disable-gpu',
-                'allow-running-insecure-content',
-                'no-referrers',
-                'ignore-certificate-errors',
-                'disk-cache-dir=' + os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache"),
-                'disk-cache-size=41943040',
-            ],
-        }
-        if headless:
-            options["args"].append("headless")
-
-        if proxy_address is not None:
-            if isinstance(proxy_address, tuple):
-                options["args"].append('proxy-server=%s:%d' % proxy_address)
-            elif isinstance(proxy_address, str):
-                options["args"].append('proxy-server=' + proxy_address)
-
-        if windows_size is not None:
-            if isinstance(windows_size, tuple):
-                options["args"].append('window-size=%d,%d' % windows_size)
-            elif isinstance(windows_size, str):
-                options["args"].append('window-size=' + windows_size)
-
-        if disable_images:
-            options["prefs"] = {
-                'profile': {
-                    'default_content_setting_values': {
-                        'images': 2
-                    }
-                }
+async def search_task(session, page_url):
+    async with session.get(page_url) as response:
+        page = bs4.BeautifulSoup(await response.text(), 'html.parser')
+        for media_clinic in page.select('span.indexed-biz-name'):
+            clinic_link = media_clinic.select_one('a')
+            yield 'task', {
+                'type': 'extract',
+                'url': urljoin(page_url, clinic_link.attrs.get('href'))
             }
 
-        self.options = options
 
-    def __call__(self):
-        service = Chromedriver()
-        browser = Chrome(chromeOptions=self.options)
-        return arsenic.get_session(service, browser)
+async def extract_task(session, page_url):
+    async with session.get(page_url) as response:
+        page = bs4.BeautifulSoup(await response.text(), 'html.parser')
+        json_text = page.select_one('script[type="application/ld+json"]').text
+        json_data = json.JSONDecoder(strict=False).decode(json_text)
 
+        # Reviews
+        reviews = []
+        for review in json_data["review"]:
+            reviews.append({
+                'author': review['author'],
+                'content': review['description'],
+                'rating': review['reviewRating']['ratingValue']
+            })
 
-async def extract_info(session, url):
-    await session.get(url)
-    page_source = await session.get_page_source()
-    page = BeautifulSoup(page_source, features="html.parser")
+        # Business Name
+        name = str.strip(page.select_one('h1.biz-page-title').text)
 
-    json_text = page.select_one('script[type="application/ld+json"]').text
-    json_data = json.JSONDecoder(strict=False).decode(json_text)
+        # Business Logo URL
+        logo = json_data["image"]
 
-    # Business Name
-    try:
-        name_element = await session.get_element('h1.biz-page-title')
-        name = await name_element.get_text()
-    except arsenic.errors.NoSuchElement:
-        name = None
+        # Business Website URL
+        website_element = page.select_one('span.biz-website a')
+        website = website_element.text if website_element is not None else None
 
-    # Business Logo URL
-    try:
-        logo_element = await session.get_element('[itemprop="image"]')
-        logo = await logo_element.get_attribute('content')
-    except arsenic.errors.NoSuchElement:
-        logo = None
+        # Business Address
+        address = str.strip(page.select_one('span[itemprop="streetAddress"]').text)
 
-    # Business Website URL
-    try:
-        website_element = await session.get_element('span.biz-website a')
-        website = await website_element.get_text()
-    except arsenic.errors.NoSuchElement:
-        website = None
+        # Business City
+        city_name = str.strip(page.select_one('span[itemprop="addressLocality"]').text)
 
-    # Business Address Street
-    street_element = page.select_one('span[itemprop="streetAddress"]')
-    if street_element is not None:
-        street = street_element.text
-    else:
-        street = None
+        # Business Region
+        region_name = str.strip(page.select_one('span[itemprop="addressRegion"]').text)
 
-    # Business Address Locality
-    city_element = page.select_one('span[itemprop="addressLocality"]')
-    if city_element is not None:
-        city = city_element.text
-    else:
-        city = None
+        # Business Phone Number
+        phone = json_data['telephone']
 
-    # Business Address Region
-    region_element = page.select_one('span[itemprop="addressRegion"]')
-    if region_element is not None:
-        region = region_element.text
-    else:
-        region = None
+        # About the Business
+        about = []
+        about_part = None
+        for about_element in page.select('.from-biz-owner-content > *'):
+            if about_element.name == 'h3':
+                if 'specialties' in about_element.text.lower():
+                    about_part = 'specialties'
+                else:
+                    about_part = None
 
-    # Business Phone Number
-    if json_data is not None:
-        phone = 'tel:' + json_data.get('telephone')
-    else:
-        phone = None
+            elif about_part is not None:
+                about_text = about_element.text.strip()
+                if len(about_text) > 0:
+                    about.append(about_text)
 
-    # About the Business
-    about = []
-    about_part = None
-    for about_element in page.select('.from-biz-owner-content > *'):
-        if about_element.name == 'h3':
-            if 'specialties' in about_element.text.lower():
-                about_part = 'specialties'
-            else:
-                about_part = None
+        categories = []
+        for category in page.select('.biz-page-header .category-str-list a'):
+            categories.append(str.strip(category.text))
 
-        elif about_part is not None:
-            about_text = about_element.text.strip()
-            if len(about_text) > 0:
-                about.append(about_text)
-
-    # Reviews Rating
-    if 'aggregateRating' in json_data:
-        stars = json_data['aggregateRating']['ratingValue']
-    else:
-        stars = None
-
-    # Reviews Sources
-    if 'reviewCount' in json_data:
-        reviews = json_data['reviewCount']
-    else:
-        reviews = 0
-
-    yield 'business', {
-        'name': name,
-        'logo': logo,
-        'website': website,
-        'region': region,
-        'city': city,
-        'street': street,
-        'about': '\n'.join(about),
-        'phone': phone,
-        'rating': {
-            'stars': stars,
-            'reviews': reviews
+        rating = {
+            'count': 0,
+            'stars': 0
         }
-    }
+        if 'aggregateRating' in json_data:
+            rating = {
+                'count': json_data['aggregateRating']['reviewCount'],
+                'stars': json_data['aggregateRating']['ratingValue']
+            }
 
+        yield 'result', {
+            'categories': categories,
+            'location': {
+                'region': {
+                    'code': region_name
+                },
+                'city': city_name,
+            },
+            'name': name,
+            'logo': logo,
+            'phone': phone,
+            'website': website,
+            'address': address,
 
-async def search_clinics(session, url):
-    await session.get(url)
-    # todo: ensure that page is correct without network error, captcha or something else
+            'about': '\n'.join(about),
 
-    for media_clinic in await session.get_elements('span.indexed-biz-name'):
-        clinic_link = await media_clinic.get_element('a')
-        yield 'task', {
-            'type': 'extract',
-            'url': await clinic_link.get_attribute('href')
+            'reviews': reviews,
+            'rating': rating
         }
 
 
 async def start_tasks(start_task):
-    tasks = [start_task]
-
-    new_session = BrowserFactory(
-        headless=True,
-        disable_images=True
-    )
+    task_attempts = 10
+    tasks = [(task_attempts, start_task)]
 
     async def handle_message(message, content):
         if message == 'task':
-            tasks.append(content)
+            tasks.append((task_attempts, content))
 
-        elif message == 'business':
+        if message == 'result':
             yield content
 
-        else:
-            raise NotImplementedError
-
-    async with new_session() as session:
+    async with aiohttp.ClientSession() as session:
         while len(tasks) > 0:
-            task = tasks.pop(random.randint(1, len(tasks)) - 1)
+            attempts, task = tasks.pop(random.randint(1, len(tasks)) - 1)
 
-            if task['type'] == 'search':
-                async for response in search_clinics(session, task['url']):
-                    async for result in handle_message(*response):
-                        yield result
+            try:
+                if task['type'] == 'search':
+                    async for response in search_task(session, task['url']):
+                        async for result in handle_message(*response):
+                            yield result
 
-            elif task['type'] == 'extract':
-                async for response in extract_info(session, task['url']):
-                    async for result in handle_message(*response):
-                        yield result
+                if task['type'] == 'extract':
+                    async for response in extract_task(session, task['url']):
+                        async for result in handle_message(*response):
+                            yield result
 
-            else:
-                raise NotImplementedError
+                print('done', task)
+
+            except Exception as ex:
+                if attempts > 0:
+                    tasks.append((attempts - 1, task))
+                await asyncio.sleep(2)
+                traceback.print_exc()
+                print(ex, task)
 
 
-async def scrape(callback, region, city, category):
+async def scrape(callback, country, region, city, category):
+    category = category['name']
+    country = country['code']
     region = region['name']
     city = city['name']
-    category = category['name']
 
     task = {
         'type': 'search',
-        'url': f'https://www.yelp.com/search?find_desc={category}&find_loc={city},+{region}&sortby=rating&start=0'
+        'url': f'https://www.yelp.com/search?find_desc={category}&find_loc={city},+{region},+{country}&sortby=rating'
     }
-    async for business in start_tasks(task):
-        business.update({
-            'city': city,
-            'region': region,
-            'category': category
-        })
-        await callback(business)
+    # task = {'type': 'extract', 'url': 'https://www.yelp.com/biz/sunset-dermatology-miami?osq=Dermatologists'}
+
+    async for facility in start_tasks(task):
+        await callback(facility)
 
 
 async def main():
     async def print_business(business):
         pprint(business)
 
-    await scrape(print_business, 'ontario', 'toronto', 'chiropractors')
-    # await scrape(print_business, 'new-york', 'new-york', 'chiropractors')
+    await scrape(
+        callback=print_business,
+
+        category={
+            'name': 'Chiropractors',
+        },
+        country={
+            'name': 'Canada',
+            'code': 'CA'
+        },
+        region={
+            'name': 'Ontario',
+            'code': 'ON'
+        },
+        city={
+            'name': 'Toronto'
+        }
+    )
 
 
 if __name__ == '__main__':

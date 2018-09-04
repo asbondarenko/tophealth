@@ -20,9 +20,8 @@ class Category(Model):
 
     id = Column(Integer, Sequence('category_id_seq'), primary_key=True)
     name = Column(String(64), nullable=False)
-    opencare_name = Column(String(64), nullable=True)
 
-    facilities = relationship("Facility", secondary=facility_category, back_populates='categories')
+    facilities = relationship("Facility", lazy='dynamic', secondary=facility_category, back_populates='categories')
 
 
 class Country(Model):
@@ -85,6 +84,7 @@ class Facility(Model):
     city = relationship("City", back_populates="facilities")
 
     fetches = relationship("FacilityInfo", back_populates="facility")
+    reviews = relationship("Review", back_populates="facility")
 
 
 class FacilityInfo(Model):
@@ -107,3 +107,19 @@ class FacilityInfo(Model):
     fetch_date = Column(DateTime, nullable=False)
 
     source = Column(String(32))
+
+
+class Review(Model):
+    __tablename__ = 'review'
+    __table_args__ = (
+        UniqueConstraint('facility_id', 'content', name='review_uc'),
+    )
+
+    id = Column(Integer, Sequence('review_id_seq'), primary_key=True)
+    author = Column(String(64), nullable=False)
+    content = Column(Text, nullable=False)
+    rating = Column(Float(asdecimal=True), nullable=False)
+    multiplier = Column(Integer, nullable=False, default=1)
+    facility_id = Column(Integer, ForeignKey("facility.id"))
+
+    facility = relationship("Facility", back_populates="reviews")
