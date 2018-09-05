@@ -11,15 +11,16 @@ from sqlalchemy.orm import sessionmaker
 import models
 import yelp
 import default
-from reviews import opencare
-
+import reviews.opencare
+import reviews.google
 
 SOURCES = {
     'yelp': yelp,
 }
 
 REVIEW_SOURCES = {
-    'opencare': opencare
+    'opencare': reviews.opencare,
+    'google': reviews.google
 }
 
 SEMAPHORE_DB = asyncio.Semaphore(value=1)
@@ -33,10 +34,13 @@ session = session_maker()
 
 async def get_source_category(source, category):
     async with SEMAPHORE_DB:
-        return session.query(models.CategoryName).filter(
-            models.CategoryName.source == source,
-            models.CategoryName.category == category
-        ).first()
+        try:
+            return session.query(models.CategoryName).filter(
+                models.CategoryName.source == source,
+                models.CategoryName.category == category
+            ).one().name
+        except sqlalchemy.orm.exc.NoResultFound:
+            return category.name
 
 
 async def populate(business):
@@ -136,7 +140,7 @@ async def populate_reviews(review_data):
                 models.Review.facility_id == review_data['facility_id'],
                 models.Review.content == f"@{review_data['source']}: generic review"
             ).one()
-            existed_review.rating = review_data['rating']
+            existed_review.rating = review_data['stars']
             existed_review.multiplier = review_data['count']
             try:
                 session.commit()
@@ -212,7 +216,7 @@ async def scrape_reviews(source, category, city, facilities):
             callback=append_review,
 
             category={
-                'name': source_category.name
+                'name': source_category
             },
             country={
                 'name': city.region.country.name,

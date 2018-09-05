@@ -2,33 +2,46 @@ import asyncio
 import random
 import traceback
 from pprint import pprint
+import urllib.parse
 
 import aiohttp
 import bs4
+import re
 
 
 async def match_task(session, task):
     async with session.get(task['url']) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
 
-        for media_info in page.select('.media-body .col-info'):
-            clinic_link = media_info.select_one('h4 a')
-            clinic_name = clinic_link.text
-            if clinic_name in task['clinics']:
-                rating_count_element = media_info.select_one('address + * .text-muted')
-                if rating_count_element is not None:
-                    rating_stars = len(media_info.select('.fa-star')) + len(media_info.select('.fa-star-half-o')) / 2
-                    rating_count = int(rating_count_element.text.strip('()'))
-                    yield 'result', {
-                        'facility_name': clinic_name,
-                        'stars': rating_stars,
-                        'count': rating_count,
-                    }
+        clinic_name = page.select_one('.xpdopen .kp-header [role="heading"] span')
+        if clinic_name is None:
+            return
+
+        rating_stars_element = page.select_one('div span.rtng')
+        if rating_stars_element is None:
+            return
+
+        rating_stars = float(rating_stars_element.text.replace(',', '.'))
+
+        rating_count_element = page.select_one('div span.rtng ~ span a span')
+        if rating_stars_element is None:
+            return
+
+        rating_count = int(re.sub('[^\d]*', '', rating_count_element.text))
+
+        yield 'result', {
+            'facility_name': task['clinic_name'],
+            'stars': rating_stars,
+            'count': rating_count,
+        }
 
 
-async def start_tasks(start_task):
+async def start_tasks(init_tasks):
     task_attempts = 10
-    tasks = [(task_attempts, start_task)]
+    tasks = [
+        (task_attempts, task)
+        for task in init_tasks
+    ]
 
     async def handle_message(message, content):
         if message == 'task':
@@ -38,9 +51,12 @@ async def start_tasks(start_task):
             yield content
 
     handler = {
-        'match': match_task
+        'search': match_task
     }
-    async with aiohttp.ClientSession() as session:
+
+    user_agent = 'Mozilla/5.0 (X11; CrOS x86_64 8172.45.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.64' \
+                 ' Safari/537.36'
+    async with aiohttp.ClientSession(headers={'User-Agent': user_agent}) as session:
         while len(tasks) > 0:
             attempts, task = tasks.pop(random.randint(1, len(tasks)) - 1)
 
@@ -60,16 +76,18 @@ async def start_tasks(start_task):
 
 
 async def scrape_reviews(callback, country, region, city, category, clinic_names):
-    region = str.lower(region['code'])
+    region = str.lower(region['name'])
     city = str.lower(city['name'])
-    category = str.lower(category['name'])
 
-    task = {
-        'type': 'match',
-        'url': f'https://www.opencare.com/{category}/{city}-{region}/',
-        'clinics': set(clinic_names)
-    }
-    async for result in start_tasks(task):
+    tasks = [
+        {
+            'type': 'search',
+            'url': f'https://www.google.com/search?q=' + urllib.parse.quote(f'{region}, {city}, {clinic_name}'),
+            'clinic_name': clinic_name
+        }
+        for clinic_name in clinic_names
+    ]
+    async for result in start_tasks(tasks):
         await callback(result)
 
 
