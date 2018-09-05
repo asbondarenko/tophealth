@@ -30,6 +30,10 @@
             <br>
             <p><b>Total rating: </b>{{ facility.total_rating }}</p>
             <p><b>Total reviews: </b>{{ facility.total_reviews }}</p>
+            <p>------- Reviews -------</p>
+            {% for source in facility.sources %}
+                <p><b>{{ source.name }}</b> rating: <b>{{ source.rating }}</b> across <b>{{ source.reviews }}</b> reviews </p>
+            {% endfor %}
         </div>
         <hr>
     {% endfor %}

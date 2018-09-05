@@ -112,8 +112,6 @@ class FacilityInfo(Model):
     address = Column(Text, nullable=False)
 
     image_url = Column(Text)
-    rating_stars = Column(Float(asdecimal=True))
-    reviews_count = Column(Integer, nullable=False)
     website_url = Column(Text)
 
     facility_id = Column(Integer, ForeignKey('facility.id'), nullable=False)
@@ -127,14 +125,13 @@ class FacilityInfo(Model):
 class Review(Model):
     __tablename__ = 'review'
     __table_args__ = (
-        UniqueConstraint('facility_id', 'content', name='review_uc'),
+        UniqueConstraint('facility_id', 'source', name='review_uc'),
     )
 
     id = Column(Integer, Sequence('review_id_seq'), primary_key=True)
-    author = Column(String(64), nullable=False)
-    content = Column(Text, nullable=False)
+    source = Column(String(64), nullable=False)
     rating = Column(Float(asdecimal=True), nullable=False)
-    multiplier = Column(Integer, nullable=False, default=1)
+    count = Column(Integer, nullable=False, default=1)
     facility_id = Column(Integer, ForeignKey("facility.id"))
 
     facility = relationship("Facility", back_populates="reviews")

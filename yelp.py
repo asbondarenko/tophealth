@@ -26,15 +26,6 @@ async def extract_task(session, page_url):
         json_text = page.select_one('script[type="application/ld+json"]').text
         json_data = json.JSONDecoder(strict=False).decode(json_text)
 
-        # Reviews
-        reviews = []
-        for review in json_data["review"]:
-            reviews.append({
-                'author': review['author'],
-                'content': review['description'],
-                'rating': review['reviewRating']['ratingValue']
-            })
-
         # Business Name
         name = str.strip(page.select_one('h1.biz-page-title').text)
 
@@ -102,7 +93,6 @@ async def extract_task(session, page_url):
 
             'about': '\n'.join(about),
 
-            'reviews': reviews,
             'rating': rating
         }
 

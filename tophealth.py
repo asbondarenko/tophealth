@@ -106,23 +106,23 @@ async def populate(business):
             address=business['address'],
 
             about=business['about'],
-
-            rating_stars=business['rating']['stars'],
-            reviews_count=business['rating']['count'],
         )
         session.add(facility_info)
+        try:
+            session.commit()
+        except sqlalchemy.exc.IntegrityError:
+            session.rollback()
 
-        for review_data in business['reviews']:
-            session.add(models.Review(
-                facility=facility,
-                author=review_data['author'],
-                content=review_data['content'],
-                rating=review_data['rating'],
-            ))
-            try:
-                session.commit()
-            except sqlalchemy.exc.IntegrityError:
-                session.rollback()
+        session.add(models.Review(
+            facility=facility,
+            source=business['source'],
+            rating=business['rating']['stars'],
+            count=business['rating']['count'],
+        ))
+        try:
+            session.commit()
+        except sqlalchemy.exc.IntegrityError:
+            session.rollback()
 
         try:
             session.commit()
@@ -138,10 +138,10 @@ async def populate_reviews(review_data):
         try:
             existed_review = session.query(models.Review).filter(
                 models.Review.facility_id == review_data['facility_id'],
-                models.Review.content == f"@{review_data['source']}: generic review"
+                models.Review.source == review_data['source']
             ).one()
             existed_review.rating = review_data['stars']
-            existed_review.multiplier = review_data['count']
+            existed_review.count = review_data['count']
             try:
                 session.commit()
             except sqlalchemy.exc.IntegrityError:
@@ -150,10 +150,9 @@ async def populate_reviews(review_data):
         except sqlalchemy.orm.exc.NoResultFound:
             session.add(models.Review(
                 facility_id=review_data['facility_id'],
-                author=review_data['source'],
-                content=f"@{review_data['source']}: generic review",
+                source=review_data['source'],
                 rating=review_data['stars'],
-                multiplier=review_data['count'],
+                count=review_data['count'],
             ))
             try:
                 session.commit()
@@ -318,11 +317,17 @@ def generate_result(city_name=None, region_name=None, country_name=None, categor
                 'info': [],
                 'total_reviews': 0,
                 'total_rating': 0,
+                'sources': [],
             }
 
             for review in facility.reviews:
-                result['total_rating'] += float(review.rating) * review.multiplier
-                result['total_reviews'] += review.multiplier
+                result['total_rating'] += float(review.rating) * review.count
+                result['total_reviews'] += review.count
+                result['sources'].append({
+                    'name': review.source,
+                    'rating': float(review.rating),
+                    'reviews': review.count
+                })
 
             if result['total_reviews'] > 0:
                 result['total_rating'] /= result['total_reviews']
