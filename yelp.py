@@ -13,7 +13,7 @@ from proxies import AsyncProxyFinder
 
 
 async def search_task(session, proxy_address, page_url):
-    async with session.get(page_url, proxy=proxy_address) as response:
+    async with session.get(page_url, proxy=proxy_address, timeout=5) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
 
         if page.select_one('.y-container_content--maintenance') is not None:
@@ -28,7 +28,7 @@ async def search_task(session, proxy_address, page_url):
 
 
 async def extract_task(session, proxy_address, page_url):
-    async with session.get(page_url, proxy=proxy_address) as response:
+    async with session.get(page_url, proxy=proxy_address, timeout=5) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
 
         if page.select_one('.y-container_content--maintenance') is not None:
@@ -141,12 +141,12 @@ async def start_tasks(proxy_manager, start_task):
 
             except (aiohttp.client_exceptions.ClientProxyConnectionError,
                     aiohttp.client_exceptions.ClientHttpProxyError,
-                    asyncio.TimeoutError,
                     aiohttp.client_exceptions.ServerDisconnectedError,
                     aiohttp.client_exceptions.ClientOSError,
+                    asyncio.TimeoutError,
                     PermissionError):
                 await proxy_manager.remove(proxy_address)
-                tasks.append((attempts, task))
+                tasks.append((attempts - 0.1, task))
 
             except Exception as ex:
                 await proxy_manager.remove(proxy_address)
@@ -180,12 +180,15 @@ async def main():
     async def print_business(business):
         pprint(business)
 
+    proxy_finder = AsyncProxyFinder()
+    asyncio.ensure_future(proxy_finder.update_proxies())
+
     await scrape(
         callback=print_business,
-        proxy_manager=AsyncProxyFinder(),
+        proxy_manager=proxy_finder,
 
         category={
-            'name': 'Chiropractors',
+            'name': 'Acupuncture',
         },
         country={
             'name': 'Canada',

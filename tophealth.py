@@ -25,7 +25,7 @@ REVIEW_SOURCES = {
 }
 
 SEMAPHORE_DB = asyncio.Semaphore(value=1)
-SEMAPHORE_SCRAPE = asyncio.Semaphore(value=100)
+SEMAPHORE_SCRAPE = asyncio.Semaphore(value=5)
 SEMAPHORE_REVIEW = asyncio.Semaphore(value=5)
 
 session_engine = create_engine('sqlite:///tophealth.db')
