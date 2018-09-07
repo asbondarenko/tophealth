@@ -4,14 +4,21 @@ import random
 import traceback
 from pprint import pprint
 from urllib.parse import urljoin
+import urllib.parse
 
 import aiohttp
 import bs4
 
+from proxies import AsyncProxyFinder
 
-async def search_task(session, page_url):
-    async with session.get(page_url) as response:
+
+async def search_task(session, proxy_address, page_url):
+    async with session.get(page_url, proxy=proxy_address) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
+
+        if page.select_one('.y-container_content--maintenance') is not None:
+            raise PermissionError('Yelp access error. Need to use another proxy')
+
         for media_clinic in page.select('span.indexed-biz-name'):
             clinic_link = media_clinic.select_one('a')
             yield 'task', {
@@ -20,9 +27,13 @@ async def search_task(session, page_url):
             }
 
 
-async def extract_task(session, page_url):
-    async with session.get(page_url) as response:
+async def extract_task(session, proxy_address, page_url):
+    async with session.get(page_url, proxy=proxy_address) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
+
+        if page.select_one('.y-container_content--maintenance') is not None:
+            raise PermissionError('Yelp access error. Need to use another proxy')
+
         json_text = page.select_one('script[type="application/ld+json"]').text
         json_data = json.JSONDecoder(strict=False).decode(json_text)
 
@@ -97,7 +108,7 @@ async def extract_task(session, page_url):
         }
 
 
-async def start_tasks(start_task):
+async def start_tasks(proxy_manager, start_task):
     task_attempts = 10
     tasks = [(task_attempts, start_task)]
 
@@ -108,32 +119,44 @@ async def start_tasks(start_task):
         if message == 'result':
             yield content
 
-    async with aiohttp.ClientSession() as session:
+    user_agent = 'Mozilla/5.0 (X11; CrOS x86_64 8172.45.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.64' \
+                 ' Safari/537.36'
+
+    async with aiohttp.ClientSession(headers={'User-Agent': user_agent}) as session:
         while len(tasks) > 0:
             attempts, task = tasks.pop(random.randint(1, len(tasks)) - 1)
-
+            proxy_address = await proxy_manager.get()
             try:
                 if task['type'] == 'search':
-                    async for response in search_task(session, task['url']):
+                    async for response in search_task(session, proxy_address, task['url']):
                         async for result in handle_message(*response):
                             yield result
 
                 if task['type'] == 'extract':
-                    async for response in extract_task(session, task['url']):
+                    async for response in extract_task(session, proxy_address, task['url']):
                         async for result in handle_message(*response):
                             yield result
 
                 print('done', task)
 
+            except (aiohttp.client_exceptions.ClientProxyConnectionError,
+                    aiohttp.client_exceptions.ClientHttpProxyError,
+                    asyncio.TimeoutError,
+                    aiohttp.client_exceptions.ServerDisconnectedError,
+                    aiohttp.client_exceptions.ClientOSError,
+                    PermissionError):
+                await proxy_manager.remove(proxy_address)
+                tasks.append((attempts, task))
+
             except Exception as ex:
+                await proxy_manager.remove(proxy_address)
                 if attempts > 0:
                     tasks.append((attempts - 1, task))
-                await asyncio.sleep(2)
                 traceback.print_exc()
                 print(ex, task)
 
 
-async def scrape(callback, country, region, city, category):
+async def scrape(proxy_manager, callback, country, region, city, category):
     category = category['name']
     country = country['code']
     region = region['name']
@@ -141,11 +164,15 @@ async def scrape(callback, country, region, city, category):
 
     task = {
         'type': 'search',
-        'url': f'https://www.yelp.com/search?find_desc={category}&find_loc={city},+{region},+{country}&sortby=rating'
+        'url': 'https://www.yelp.com/search?find_desc='
+               f'{urllib.parse.quote(category)}&find_loc='
+               f'{urllib.parse.quote(city)},+'
+               f'{urllib.parse.quote(region)},+'
+               f'{urllib.parse.quote(country)}'
+               '&sortby=rating'
     }
-    # task = {'type': 'extract', 'url': 'https://www.yelp.com/biz/sunset-dermatology-miami?osq=Dermatologists'}
 
-    async for facility in start_tasks(task):
+    async for facility in start_tasks(proxy_manager, task):
         await callback(facility)
 
 
@@ -155,6 +182,7 @@ async def main():
 
     await scrape(
         callback=print_business,
+        proxy_manager=AsyncProxyFinder(),
 
         category={
             'name': 'Chiropractors',

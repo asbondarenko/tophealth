@@ -1,0 +1,405 @@
+CA,AB,Airdrie
+CA,AB,Calgary
+CA,AB,Edmonton
+CA,AB,Grande prairie
+CA,AB,Lethbridge
+CA,AB,Medicine hat
+CA,AB,Red deer
+CA,AB,Sherwood park
+CA,AB,St albert
+CA,AB,Abbotsford
+CA,BC,Abbotsford
+CA,BC,Burnaby
+CA,BC,Chilliwack
+CA,BC,Coquitlam
+CA,BC,Delta
+CA,BC,Kamloops
+CA,BC,Kelowna
+CA,BC,Langley
+CA,BC,Maple ridge
+CA,BC,Nanaimo
+CA,BC,New westminster
+CA,BC,North vancouver
+CA,BC,Port coquitlam
+CA,BC,Prince george
+CA,BC,Richmond
+CA,BC,Saanich
+CA,BC,Surrey
+CA,BC,Vancouver
+CA,BC,Victoria
+CA,MB,Winnipeg
+CA,NB,Fredericton
+CA,NB,Moncton
+CA,NB,Saint john
+CA,NL,St. John's
+CA,NS,Cape breton
+CA,NS,Halifax
+CA,ON,Ajax
+CA,ON,Aurora
+CA,ON,Barrie
+CA,ON,Belleville
+CA,ON,Brampton
+CA,ON,Brantford
+CA,ON,Burlington
+CA,ON,Caledon
+CA,ON,Cambridge
+CA,ON,Chatham
+CA,ON,Georgetown
+CA,ON,Guelph
+CA,ON,Halton hills
+CA,ON,Hamilton
+CA,ON,Huntsville
+CA,ON,Kawartha lakes
+CA,ON,Kingston
+CA,ON,Kitchener
+CA,ON,London
+CA,ON,Markham
+CA,ON,Milton
+CA,ON,Mississauga
+CA,ON,Newmarket
+CA,ON,Niagara falls
+CA,ON,Norfolk
+CA,ON,North bay
+CA,ON,Oakville
+CA,ON,Orangeville
+CA,ON,Orillia
+CA,ON,Oshawa
+CA,ON,Ottawa
+CA,ON,Peterborough
+CA,ON,Pickering
+CA,ON,Richmond hill
+CA,ON,Sarnia
+CA,ON,Sault ste marie
+CA,ON,St catharines
+CA,ON,Stouffville
+CA,ON,Stratford
+CA,ON,Sudbury
+CA,ON,Thunder bay
+CA,ON,Toronto
+CA,ON,Vaughan
+CA,ON,Waterloo
+CA,ON,Welland
+CA,ON,Whitby
+CA,ON,Windsor
+CA,QC,Blainville
+CA,QC,Brossard
+CA,QC,Dollard des ormeaux
+CA,QC,Drummondville
+CA,QC,Gatineau
+CA,QC,Granby
+CA,QC,Laval
+CA,QC,Levis
+CA,QC,Longueuil
+CA,QC,Mirabel
+CA,QC,Montreal
+CA,QC,Quebec
+CA,QC,Repentigny
+CA,QC,Saguenay
+CA,QC,Saint hyacinthe
+CA,QC,Saint jean sur richelieu
+CA,QC,Saint jerome
+CA,QC,Shawinigan
+CA,QC,Sherbrooke
+CA,QC,Terrebonne
+CA,QC,Trois rivieres
+CA,SK,Regina
+CA,SK,Saskatoon
+US,AL,Birmingham
+US,AL,Huntsville
+US,AL,Mobile
+US,AL,Montgomery
+US,AK,Anchorage
+US,AZ,Chandler
+US,AZ,Gilbert
+US,AZ,Glendale
+US,AZ,Mesa
+US,AZ,Peoria
+US,AZ,Phoenix
+US,AZ,Scottsdale
+US,AZ,Surprise
+US,AZ,Tempe
+US,AZ,Tucson
+US,AR,Little rock
+US,CA,Anaheim
+US,CA,Antioch
+US,CA,Bakersfield
+US,CA,Berkeley
+US,CA,Burbank
+US,CA,Carlsbad
+US,CA,Chula vista
+US,CA,Clovis
+US,CA,Compton
+US,CA,Concord
+US,CA,Corona
+US,CA,Costa mesa
+US,CA,Daly city
+US,CA,Downey
+US,CA,El cajon
+US,CA,El monte
+US,CA,Elk grove
+US,CA,Escondido
+US,CA,Fairfield
+US,CA,Fontana
+US,CA,Fremont
+US,CA,Fresno
+US,CA,Fullerton
+US,CA,Garden grove
+US,CA,Glendale
+US,CA,Hayward
+US,CA,Huntington beach
+US,CA,Inglewood
+US,CA,Irvine
+US,CA,Lancaster
+US,CA,Long beach
+US,CA,Los angeles
+US,CA,Modesto
+US,CA,Moreno valley
+US,CA,Murrieta
+US,CA,Newport beach
+US,CA,Norwalk
+US,CA,Oakland
+US,CA,Oceanside
+US,CA,Ontario
+US,CA,Orange
+US,CA,Oxnard
+US,CA,Palmdale
+US,CA,Pasadena
+US,CA,Pomona
+US,CA,Rancho cucamonga
+US,CA,Rialto
+US,CA,Richmond
+US,CA,Riverside
+US,CA,Roseville
+US,CA,Sacramento
+US,CA,Salinas
+US,CA,San bernardino
+US,CA,San diego
+US,CA,San francisco
+US,CA,San jose
+US,CA,San mateo
+US,CA,Santa ana
+US,CA,Santa clara
+US,CA,Santa clarita
+US,CA,Santa maria
+US,CA,Santa rosa
+US,CA,Simi valley
+US,CA,Stockton
+US,CA,Sunnyvale
+US,CA,Temecula
+US,CA,Thousand oaks
+US,CA,Torrance
+US,CA,Vallejo
+US,CA,Ventura
+US,CA,Victorville
+US,CA,Visalia
+US,CA,Walnut creek
+US,CA,West covina
+US,CO,Arvada
+US,CO,Aurora
+US,CO,Boulder
+US,CO,Centennial
+US,CO,Colorado springs
+US,CO,Denver
+US,CO,Fort collins
+US,CO,Lakewood
+US,CO,Pueblo
+US,CO,Thornton
+US,CO,Westminster
+US,CT,Bridgeport
+US,CT,Hartford
+US,CT,New haven
+US,CT,Stamford
+US,CT,Waterbury
+US,DC,Washington
+US,FL,Cape coral
+US,FL,Clearwater
+US,FL,Coral springs
+US,FL,Fort lauderdale
+US,FL,Gainesville
+US,FL,Hialeah
+US,FL,Hollywood
+US,FL,Jacksonville
+US,FL,Lakeland
+US,FL,Miami
+US,FL,Miami gardens
+US,FL,Miramar
+US,FL,Orlando
+US,FL,Palm bay
+US,FL,Pembroke pines
+US,FL,Pompano beach
+US,FL,Port st lucie
+US,FL,St petersburg
+US,FL,Tallahassee
+US,FL,Tampa
+US,FL,West palm beach
+US,GA,Athens
+US,GA,Atlanta
+US,GA,Augusta
+US,GA,Columbus
+US,GA,Savannah
+US,HI,Honolulu
+US,ID,Boise city
+US,IL,Aurora
+US,IL,Chicago
+US,IL,Elgin
+US,IL,Joliet
+US,IL,Naperville
+US,IL,Peoria
+US,IL,Rockford
+US,IL,Springfield
+US,IN,Evansville
+US,IN,Fort wayne
+US,IN,Indianapolis
+US,IN,South bend
+US,IA,Cedar rapids
+US,IA,Davenport
+US,IA,Des moines
+US,KS,Kansas city
+US,KS,Olathe
+US,KS,Overland park
+US,KS,Topeka
+US,KS,Wichita
+US,TY,Lexington
+US,TY,Luisville
+US,LA,Baton rouge
+US,LA,Lafayette
+US,LA,New orleans
+US,LA,Shreveport
+US,MD,Baltimore
+US,MA,Boston
+US,MA,Cambridge
+US,MA,Lowell
+US,MA,Springfield
+US,MA,Worcester
+US,MI,Ann arbor
+US,MI,Dearborn
+US,MI,Detroit
+US,MI,Flint
+US,MI,Grand rapids
+US,MI,Lansing
+US,MI,Sterling heights
+US,MI,Warren
+US,MN,Minneapolis
+US,MN,Rochester
+US,MN,St paul
+US,MS,Jakson
+US,MO,Columbia
+US,MO,Independence
+US,MO,Kansas city
+US,MO,Springfield
+US,MO,St louis
+US,MT,Billings
+US,NE,Lincoln
+US,NE,Omaha
+US,NV,Henderson
+US,NV,Las vegas
+US,NV,North las vegas
+US,NV,Reno
+US,NH,Manchester
+US,NJ,Elizabeth
+US,NJ,Jersey city
+US,NJ,Newark
+US,NJ,Paterson
+US,NM,Alburquerque
+US,NM,Las cruces
+US,NY,Albany
+US,NY,Buffalo
+US,NY,New york
+US,NY,Rochester
+US,NY,Syracuse
+US,NY,Yonkers
+US,NC,Cary
+US,NC,Charlotte
+US,NC,Durham
+US,NC,Fayetteville
+US,NC,Greensboro
+US,NC,High point
+US,NC,Raleigh
+US,NC,Wilmington
+US,NC,Winston salem
+US,ND,Fargo
+US,OH,Akron
+US,OH,Cincinnati
+US,OH,Cleveland
+US,OH,Columbus
+US,OH,Dayton
+US,OH,Toledo
+US,OK,Broken arrow
+US,OK,Norman
+US,OK,Oklahoma city
+US,OK,Tulsa
+US,OR,Eugene
+US,OR,Gresham
+US,OR,Portland
+US,OR,Salem
+US,PA,Allentown
+US,PA,Erie
+US,PA,Philadelphia
+US,PA,Pittsburgh
+US,RI,Providence
+US,SC,Charleston
+US,SC,Columbia
+US,SC,North charleston
+US,SD,Sioux falls
+US,TN,Chattanooga
+US,TN,Clarksville
+US,TN,Knoxville
+US,TN,Memphis
+US,TN,Murfreesboro
+US,TN,Nashville
+US,TX,Abilene
+US,TX,Amarillo
+US,TX,Arlington
+US,TX,Austin
+US,TX,Beaumont
+US,TX,Brownsville
+US,TX,Carrollton
+US,TX,Corpus christi
+US,TX,Dallas
+US,TX,Denton
+US,TX,El paso
+US,TX,Fort worth
+US,TX,Frisco
+US,TX,Garland
+US,TX,Grand prairie
+US,TX,Houston
+US,TX,Irving
+US,TX,Killeen
+US,TX,Laredo
+US,TX,Lewisville
+US,TX,Lubbock
+US,TX,Mcallen
+US,TX,Mckinney
+US,TX,Mesquite
+US,TX,Midland
+US,TX,Odessa
+US,TX,Pasadena
+US,TX,Plano
+US,TX,Richardson
+US,TX,Round rock
+US,TX,San antonio
+US,TX,Tyler
+US,TX,Waco
+US,TX,Wichita falls
+US,UT,Provo
+US,UT,Salt lake city
+US,UT,West jordan
+US,UT,West valley city
+US,VA,Alexandria
+US,VA,Chesapeake
+US,VA,Hampton
+US,VA,Newport news
+US,VA,Norfolk
+US,VA,Richmond
+US,VA,Roanoke
+US,VA,Virginia beach
+US,WA,Bellevue
+US,WA,Everett
+US,WA,Kent
+US,WA,Seattle
+US,WA,Spokane
+US,WA,Tacoma
+US,WI,Green bay
+US,WI,Kenosha
+US,WI,Madison
+US,WI,Milwaukee

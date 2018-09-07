@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Show all tops</title>
+</head>
+<body>
+    <div>
+        {% for category, location in categories %}
+            <p>
+            <a href="/{{location.region.code}}/{{ location.city.name }}/{{ category }}">
+                Top {{ category }} in {{ location.city.name }}, {{ location.region.code }}
+            </a>
+            </p>
+        {% endfor %}
+    </div>
+</body>
+</html>

@@ -61,7 +61,7 @@ async def start_tasks(start_task):
 
 async def scrape_reviews(callback, country, region, city, category, clinic_names):
     region = str.lower(region['code'])
-    city = str.lower(city['name'])
+    city = str.lower(city['name']).replace(' ', '-')
     category = str.lower(category['name'])
 
     task = {

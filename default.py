@@ -1,164 +1,89 @@
-import sqlalchemy.exc
+import csv
+import os
 
+import sqlalchemy.exc
 import models
 
 
-PLACES = [
-    ('Canada', 'CA', [
-        ('Ontario', 'ON', [
-            'Toronto',
-        ]),
-    ]),
-    ("United States", 'US', [
-        ('Florida', 'FL', [
-            'Miami',
-        ]),
-    ])
-]
-
-CATEGORIES = [
-    ('Acupuncture', 'Acupuncture', 'acupuncturists'),
-    ('Allergists', 'Allergists', None),
-    ('Audiologists', 'Audiologist', 'audiologists'),
-    ('Cardiologists', 'Cardiologists', None),
-    ('Chiropractors', 'Chiropractors', 'chiropractors'),
-    ('Cosmetic Surgeons', 'Cosmetic Surgeons', None),
-    ('Dentists', 'Dentists', 'dentists'),
-    ('Dermatologists', 'Dermatologists', 'dermatologists'),
-    ('Ear Nose and Throat (ENT) Doctors', 'Ear Nose & Throat', None),
-    ('Endocrinologists', None, 'endocrinologists'),
-    ('Endodontists', 'Endodontists', 'endodontists'),
-    ('Family Doctors', 'Family Practice', 'family-doctors'),
-    ('Gastroenterologists', 'Gastroenterologist', None),
-    ('Gynecologists', 'Obstetricians & Gynecologists', None),
-    ('Homeopath', None, 'homeopaths'),
-    ('Massage therapy', 'Massage Therapy', None),
-    ('Naturopath', 'Naturopathic/Holistic', 'naturopaths'),
-    ('Nephrologists', 'Nephrologists', None),
-    ('Neurologists', 'Neurologist', None),
-    ('Neurosurgeons', None,  None),
-    ('Occupational Therapy', 'Occupational Therapy',  'occupational-therapists'),
-    ('Oncologists', 'Oncologist', None),
-    ('Ophthalmologists', 'Ophthalmologists', 'ophthalmologists'),
-    ('Optometrists', 'Optometrists', 'optometrists'),
-    ('Oral Surgeons', 'Oral Surgeons', 'oral-surgeons'),
-    ('Orthodontists', 'Orthodontists', 'orthodontists'),
-    ('Orthopedics', 'Orthopedists', 'orthopedic-surgeons'),
-    ('Pediatricians', 'Pediatricians', 'pediatricians'),
-    ('Physical therapy', 'Physical Therapy', 'physical-therapists'),
-    ('Podiatrists', 'Podiatrists', 'podiatrists'),
-    ('Proctologists', None, 'psychiatrists'),
-    ('Psychiatrists', 'Psychiatrists', 'psychologists'),
-    ('Psychologists', 'Psychologists', None),
-    ('Pulmonologists', 'Pulmonologist', None),
-    ('Rheumatologists', 'Rheumatologists', None),
-    ('Sleep Doctors', 'Sleep Specialists', None),
-    ('Surgeons', 'Surgeons', None),
-    ('Therapists', None, None),
-    ('Urologist', 'Urologists', None)
-]
-
-
 def create_data(session):
-    def create_city(region_id, name):
-        city = session.query(models.City).filter(
-            models.City.name == name,
-            models.City.region_id == region_id
-        ).first()
-
-        if city is None:
-            city = models.City(
-                name=name,
-                region_id=region_id
-            )
-            session.add(city)
-            session.commit()
-
-        return city
-
-    def create_region(country_id, name, code):
-        region = session.query(models.Region).filter(
-            models.Region.name == name,
-            models.Region.code == code,
-            models.Region.country_id == country_id,
-        ).first()
-
-        if region is None:
-            region = models.Region(
-                name=name,
-                code=code,
-                country_id=country_id
-            )
-            session.add(region)
-            session.commit()
-
-        return region
-
-    def create_country(name, code):
-        country = session.query(models.Country).filter(
-            models.Country.name == name,
-            models.Country.code == code,
-        ).first()
-
-        if country is None:
-            country = models.Country(
-                name=name,
-                code=code
-            )
-            session.add(country)
-            session.commit()
-
-        return country
-
-    def create_category(name, yelp_name, opencare_name):
-        category = session.query(models.Category).filter(
-            models.Category.name == name,
-        ).first()
-
-        if category is None:
-            category = models.Category(
-                name=name
-            )
-            session.add(category)
-            session.commit()
-
-        if yelp_name is not None:
-            session.add(models.CategoryName(
-                source='yelp',
-                name=yelp_name,
-                category=category
+    with open('default/categories.csv') as f:
+        for category in csv.DictReader(f, fieldnames=['name']):
+            session.add(models.Category(
+                name=category['name']
             ))
             try:
                 session.commit()
             except sqlalchemy.exc.IntegrityError:
                 session.rollback()
 
-        if opencare_name is not None:
-            session.add(models.CategoryName(
-                source='opencare',
-                name=opencare_name,
-                category=category
+    for source in os.listdir('default/sources/'):
+        source_path = os.path.join('default/sources/', source)
+        if not os.path.isdir(source_path):
+            continue
+
+        categories_path = os.path.join(source_path, 'categories.csv')
+        if not os.path.exists(categories_path):
+            continue
+
+        with open(categories_path) as f:
+            for source_category in csv.DictReader(f, fieldnames=['name', 'alias']):
+                if len(source_category['alias']) == 0:
+                    continue
+
+                category = session.query(models.Category).filter(models.Category.name == source_category['name']).one()
+                session.add(models.CategoryName(
+                    source=source,
+                    name=source_category['alias'],
+                    category=category
+                ))
+
+                try:
+                    session.commit()
+                except sqlalchemy.exc.IntegrityError:
+                    session.rollback()
+
+    with open('default/countries.csv') as f:
+        for country in csv.DictReader(f, fieldnames=['name', 'code']):
+            session.add(models.Country(
+                name=country['name'],
+                code=country['code'],
             ))
             try:
                 session.commit()
             except sqlalchemy.exc.IntegrityError:
                 session.rollback()
 
-        return category
+    with open('default/regions.csv') as f:
+        for region in csv.DictReader(f, fieldnames=['country', 'name', 'code']):
+            country = session.query(models.Country).filter(models.Country.name == region['country']).one()
+            session.add(models.Region(
+                name=region['name'],
+                code=region['code'],
+                country=country
+            ))
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()
 
-    def create_places(countries):
-        for country_name, country_code, regions in countries:
-            country = create_country(country_name, country_code)
+    with open('default/cities.csv') as f:
+        for city in csv.DictReader(f, fieldnames=['country_code', 'region_code', 'name']):
+            region = session.query(models.Region).select_from(
+                sqlalchemy.join(
+                    models.Country,
+                    models.Region,
+                    models.Country.id == models.Region.country_id
+                )
+            ).filter(
+                models.Region.code == city['region_code'],
+                models.Country.code == city['country_code'],
+            ).one()
 
-            for region_name, region_code, cities in regions:
-                region = create_region(country.id, region_name, region_code)
-
-                for city_name in cities:
-                    create_city(region.id, city_name)
-
-    def create_categories(categories):
-        for category_names in categories:
-            create_category(*category_names)
-
-    create_places(PLACES)
-    create_categories(CATEGORIES)
+            session.add(models.City(
+                name=city['name'],
+                region=region
+            ))
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError:
+                session.rollback()

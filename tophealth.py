@@ -5,7 +5,7 @@ import json
 
 import sqlalchemy
 import sqlalchemy.exc
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
 import models
@@ -13,6 +13,7 @@ import yelp
 import default
 import reviews.opencare
 import reviews.google
+from proxies import AsyncProxyFinder
 
 SOURCES = {
     'yelp': yelp,
@@ -24,7 +25,7 @@ REVIEW_SOURCES = {
 }
 
 SEMAPHORE_DB = asyncio.Semaphore(value=1)
-SEMAPHORE_SCRAPE = asyncio.Semaphore(value=5)
+SEMAPHORE_SCRAPE = asyncio.Semaphore(value=100)
 SEMAPHORE_REVIEW = asyncio.Semaphore(value=5)
 
 session_engine = create_engine('sqlite:///tophealth.db')
@@ -43,6 +44,86 @@ async def get_source_category(source, category):
             return category.name
 
 
+async def get_location(city, region=None, country=None):
+    async with SEMAPHORE_DB:
+        query = session.query(models.Country, models.Region, models.City).select_from(
+            sqlalchemy.join(
+                models.Country,
+                sqlalchemy.join(
+                    models.Region,
+                    models.City,
+                    models.City.region_id == models.Region.id
+                ),
+                models.Region.country_id == models.Country.id
+            )
+        )
+        if city is not None and 'name' in city:
+            query = query.filter(models.City.name == city['name'])
+
+        if region is not None:
+            if 'name' in region:
+                query = query.filter(models.Region.name == region['name'])
+            if 'code' in region:
+                query = query.filter(models.Region.code == region['code'])
+
+        if country is not None:
+            if 'name' in country:
+                query = query.filter(models.Country.name == country['name'])
+            if 'code' in country:
+                query = query.filter(models.Country.code == country['code'])
+
+        results = []
+        for country, region, city in query.all():
+            results.append({
+                'country': {
+                    'name': country.name,
+                    'code': country.code
+                },
+                'region': {
+                    'name': region.name,
+                    'code': region.code
+                },
+                'city': {
+                    'name': city.name
+                }
+            })
+
+        return results
+
+
+async def get_locations_categories():
+    async with SEMAPHORE_DB:
+        query = session.query(
+            models.Category, models.City, models.Region, models.Country
+        ).join(
+            (models.Category, models.Facility.categories),
+        ).join(
+            models.City, models.City.id == models.Facility.city_id
+        ).join(
+            models.Region, models.Region.id == models.City.region_id
+        ).join(
+            models.Country, models.Country.id == models.Region.country_id
+        )
+
+        for category, city, region, country in query.all():
+            yield (
+                category.name,
+                {
+                    'city': {
+                        'name': city.name
+                    },
+                    'region': {
+                        'name': region.name,
+                        'code': region.code
+                    },
+                    'country': {
+                        'name': country.name,
+                        'code': country.code
+                    }
+                }
+            )
+
+
 async def populate(business):
     async with SEMAPHORE_DB:
         source_categories = (
@@ -55,9 +136,13 @@ async def populate(business):
         try:
             filter_expressions = []
             if 'name' in business['location']['region']:
-                filter_expressions.append(models.Region.name == business['location']['region']['name'])
+                filter_expressions.append(
+                    func.lower(models.Region.name) == func.lower(business['location']['region']['name'])
+                )
             if 'code' in business['location']['region']:
-                filter_expressions.append(models.Region.code == business['location']['region']['code'])
+                filter_expressions.append(
+                    models.Region.code == business['location']['region']['code']
+                )
 
             region_id, = (
                 session.query(models.Region.id)
@@ -71,7 +156,7 @@ async def populate(business):
         try:
             city_id, = (
                 session.query(models.City.id).filter(
-                    models.City.name == business['location']['city'],
+                    func.lower(models.City.name) == func.lower(business['location']['city']),
                     models.City.region_id == region_id,
                 )
             ).one()
@@ -81,7 +166,7 @@ async def populate(business):
             return False
 
         facility = session.query(models.Facility).filter(
-            models.Facility.name == business['name'],
+            func.lower(models.Facility.name) == func.lower(business['name']),
             models.Facility.city_id == city_id
         ).first()
 
@@ -160,7 +245,7 @@ async def populate_reviews(review_data):
                 session.rollback()
 
 
-async def scrape(source, category, city):
+async def scrape(proxy_manager, source, category, city):
     async with SEMAPHORE_SCRAPE:
         scraper = SOURCES[source]
 
@@ -172,6 +257,7 @@ async def scrape(source, category, city):
 
         await scraper.scrape(
             callback=append_facility,
+            proxy_manager=proxy_manager,
 
             category={
                 'name': category.name,
@@ -352,21 +438,21 @@ def main():
     subparsers.add_parser('init')
 
     scrape_parser = subparsers.add_parser('scrape')
-    scrape_parser.add_argument('source', choices=list(SOURCES))
+    scrape_parser.add_argument('--source', choices=list(SOURCES))
     scrape_parser.add_argument('--city', help="City for scraping")
     scrape_parser.add_argument('--region', help="Region for scraping")
     scrape_parser.add_argument('--country', help="Country for scraping")
     scrape_parser.add_argument('--categories', nargs='*', help="List of categories")
 
     review_parser = subparsers.add_parser('reviews')
-    review_parser.add_argument('source', choices=list(REVIEW_SOURCES))
+    review_parser.add_argument('--source', choices=list(REVIEW_SOURCES))
     review_parser.add_argument('--city', help="City for scraping")
     review_parser.add_argument('--region', help="Region for scraping")
     review_parser.add_argument('--country', help="Country for scraping")
     review_parser.add_argument('--categories', nargs='*', help="List of categories")
 
     result_parser = subparsers.add_parser('result')
-    result_parser.add_argument('city', help="City for results")
+    result_parser.add_argument('--city', help="City for results")
     result_parser.add_argument('--region', help="Region for results")
     result_parser.add_argument('--country', help="Country for results")
     result_parser.add_argument('--categories', nargs='*', help="List of categories")
@@ -423,14 +509,25 @@ def main():
         categories = categories_query.all()
 
         if args.mode == 'scrape':
+            proxy_finder = AsyncProxyFinder()
+            asyncio.ensure_future(proxy_finder.update_proxies())
+
             scrapers = []
             for city in cities:
                 for category in categories:
-                    scrapers.append(scrape(
-                        source=args.source,
-                        category=category,
-                        city=city
-                    ))
+
+                    if args.source is not None:
+                        sources = [args.source]
+                    else:
+                        sources = list(SOURCES.keys())
+
+                    for source in sources:
+                        scrapers.append(scrape(
+                            proxy_manager=proxy_finder,
+                            source=source,
+                            category=category,
+                            city=city
+                        ))
 
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.gather(*scrapers))
@@ -440,12 +537,19 @@ def main():
             for city in cities:
                 for category in categories:
                     facilities = category.facilities.filter(models.Facility.city == city).all()
-                    scrapers.append(scrape_reviews(
-                        source=args.source,
-                        category=category,
-                        city=city,
-                        facilities=facilities
-                    ))
+
+                    if args.source is not None:
+                        sources = [args.source]
+                    else:
+                        sources = list(REVIEW_SOURCES.keys())
+
+                    for source in sources:
+                        scrapers.append(scrape_reviews(
+                            source=source,
+                            category=category,
+                            city=city,
+                            facilities=facilities
+                        ))
 
             loop = asyncio.get_event_loop()
             loop.run_until_complete(asyncio.gather(*scrapers))
