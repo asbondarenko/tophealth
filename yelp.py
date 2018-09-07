@@ -13,7 +13,7 @@ from proxies import AsyncProxyFinder
 
 
 async def search_task(session, proxy_address, page_url):
-    async with session.get(page_url, proxy=proxy_address, timeout=5) as response:
+    async with session.get(page_url, proxy=proxy_address, timeout=10) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
 
         if page.select_one('.y-container_content--maintenance') is not None:
@@ -28,7 +28,7 @@ async def search_task(session, proxy_address, page_url):
 
 
 async def extract_task(session, proxy_address, page_url):
-    async with session.get(page_url, proxy=proxy_address, timeout=5) as response:
+    async with session.get(page_url, proxy=proxy_address, timeout=10) as response:
         page = bs4.BeautifulSoup(await response.text(), 'html.parser')
 
         if page.select_one('.y-container_content--maintenance') is not None:
@@ -38,7 +38,10 @@ async def extract_task(session, proxy_address, page_url):
         json_data = json.JSONDecoder(strict=False).decode(json_text)
 
         # Business Name
-        name = str.strip(page.select_one('h1.biz-page-title').text)
+        name_element = page.select_one('h1.biz-page-title')
+        if name_element is None:
+            return
+        name = str.strip(name_element.text)
 
         # Business Logo URL
         logo = json_data["image"]
@@ -48,13 +51,22 @@ async def extract_task(session, proxy_address, page_url):
         website = website_element.text if website_element is not None else None
 
         # Business Address
-        address = str.strip(page.select_one('span[itemprop="streetAddress"]').text)
+        address_element = page.select_one('span[itemprop="streetAddress"]')
+        if address_element is None:
+            return
+        address = str.strip(address_element.text)
 
         # Business City
-        city_name = str.strip(page.select_one('span[itemprop="addressLocality"]').text)
+        city_name_element = page.select_one('span[itemprop="addressLocality"]')
+        if city_name_element is None:
+            return
+        city_name = str.strip(city_name_element.text)
 
         # Business Region
-        region_name = str.strip(page.select_one('span[itemprop="addressRegion"]').text)
+        region_name_element = page.select_one('span[itemprop="addressRegion"]')
+        if region_name_element is None:
+            return
+        region_name = str.strip(region_name_element.text)
 
         # Business Phone Number
         phone = json_data['telephone']
@@ -143,17 +155,21 @@ async def start_tasks(proxy_manager, start_task):
                     aiohttp.client_exceptions.ClientHttpProxyError,
                     aiohttp.client_exceptions.ServerDisconnectedError,
                     aiohttp.client_exceptions.ClientOSError,
+                    aiohttp.client_exceptions.ClientResponseError,
                     asyncio.TimeoutError,
-                    PermissionError):
+                    PermissionError) as ex:
                 await proxy_manager.remove(proxy_address)
                 tasks.append((attempts - 0.1, task))
+                # print('repeat(', attempts - 0.1, ')', task)
+                print(type(ex))
 
             except Exception as ex:
-                await proxy_manager.remove(proxy_address)
                 if attempts > 0:
                     tasks.append((attempts - 1, task))
                 traceback.print_exc()
                 print(ex, task)
+
+        print('all done')
 
 
 async def scrape(proxy_manager, callback, country, region, city, category):

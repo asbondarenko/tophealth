@@ -13,15 +13,22 @@ class AsyncProxyFinder:
         self.__broker = proxybroker.Broker(self.__proxies)
 
     async def update_proxies(self):
+        print("Fetching proxies...")
         asyncio.ensure_future(self.__broker.find(types=['HTTP'], limit=100))
         while True:
             proxy = await self.__proxies.get()
             if proxy is None:
+                while len(self.__alive_proxies) > 50:
+                    await asyncio.sleep(10)
+                print("Fetching proxies...")
                 asyncio.ensure_future(self.__broker.find(types=['HTTP'], limit=100))
+                continue
+
             self.__alive_proxies.add(f'http://{proxy.host}:{proxy.port}')
 
     async def get(self):
         while len(self.__alive_proxies) == 0:
+            print('waiting for proxies...')
             await asyncio.sleep(10)
         proxy_address, = random.sample(self.__alive_proxies, 1)
         return proxy_address
