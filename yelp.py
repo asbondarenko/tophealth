@@ -12,12 +12,19 @@ import bs4
 from proxies import AsyncProxyFinder
 
 
+def validate(page):
+    if page.select_one('.y-container_content--maintenance') is not None:
+        raise PermissionError('Yelp access error. Need to use another proxy')
+
+    if page.select_one('form[name="captcha_form"]') is not None:
+        raise PermissionError('Yelp access error. Need to use another proxy')
+
+    return page
+
+
 async def search_task(session, proxy_address, page_url):
     async with session.get(page_url, proxy=proxy_address, timeout=10) as response:
-        page = bs4.BeautifulSoup(await response.text(), 'html.parser')
-
-        if page.select_one('.y-container_content--maintenance') is not None:
-            raise PermissionError('Yelp access error. Need to use another proxy')
+        page = validate(bs4.BeautifulSoup(await response.text(), 'html.parser'))
 
         for media_clinic in page.select('span.indexed-biz-name'):
             clinic_link = media_clinic.select_one('a')
@@ -29,12 +36,14 @@ async def search_task(session, proxy_address, page_url):
 
 async def extract_task(session, proxy_address, page_url):
     async with session.get(page_url, proxy=proxy_address, timeout=10) as response:
-        page = bs4.BeautifulSoup(await response.text(), 'html.parser')
+        page = validate(bs4.BeautifulSoup(await response.text(), 'html.parser'))
 
-        if page.select_one('.y-container_content--maintenance') is not None:
-            raise PermissionError('Yelp access error. Need to use another proxy')
+        json_script = page.select_one('script[type="application/ld+json"]')
+        if json_script is None:
+            with open('wrong_json.html', 'w') as f:
+                f.write(page.prettify())
 
-        json_text = page.select_one('script[type="application/ld+json"]').text
+        json_text = json_script.text
         json_data = json.JSONDecoder(strict=False).decode(json_text)
 
         # Business Name
@@ -122,10 +131,16 @@ async def extract_task(session, proxy_address, page_url):
 
 async def start_tasks(proxy_manager, start_task):
     task_attempts = 10
+
+    statistic = {
+        'done': 0,
+        'count': 1
+    }
     tasks = [(task_attempts, start_task)]
 
     async def handle_message(message, content):
         if message == 'task':
+            statistic['count'] += 1
             tasks.append((task_attempts, content))
 
         if message == 'result':
@@ -150,6 +165,7 @@ async def start_tasks(proxy_manager, start_task):
                             yield result
 
                 print('done', task)
+                statistic['done'] += 1
 
             except (aiohttp.client_exceptions.ClientProxyConnectionError,
                     aiohttp.client_exceptions.ClientHttpProxyError,
@@ -157,11 +173,9 @@ async def start_tasks(proxy_manager, start_task):
                     aiohttp.client_exceptions.ClientOSError,
                     aiohttp.client_exceptions.ClientResponseError,
                     asyncio.TimeoutError,
-                    PermissionError) as ex:
+                    PermissionError):
                 await proxy_manager.remove(proxy_address)
-                tasks.append((attempts - 0.1, task))
-                # print('repeat(', attempts - 0.1, ')', task)
-                print(type(ex))
+                tasks.append((attempts - task_attempts / 10, task))
 
             except Exception as ex:
                 if attempts > 0:
@@ -169,7 +183,7 @@ async def start_tasks(proxy_manager, start_task):
                 traceback.print_exc()
                 print(ex, task)
 
-        print('all done')
+        print(f"statistic: {statistic['done']}/{statistic['count']}", start_task)
 
 
 async def scrape(proxy_manager, callback, country, region, city, category):

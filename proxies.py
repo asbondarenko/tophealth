@@ -12,26 +12,33 @@ class AsyncProxyFinder:
         self.__proxies = asyncio.Queue()
         self.__broker = proxybroker.Broker(self.__proxies)
 
-    async def update_proxies(self):
+    async def update_proxies(self, min_count=1000):
         print("Fetching proxies...")
-        asyncio.ensure_future(self.__broker.find(types=['HTTP'], limit=100))
+        await self.__broker.find(types=['HTTP'], limit=min_count * 2)
         while True:
             proxy = await self.__proxies.get()
             if proxy is None:
-                while len(self.__alive_proxies) > 50:
+                while len(self.__alive_proxies) > min_count:
                     await asyncio.sleep(10)
-                print("Fetching proxies...")
-                asyncio.ensure_future(self.__broker.find(types=['HTTP'], limit=100))
-                continue
 
-            self.__alive_proxies.add(f'http://{proxy.host}:{proxy.port}')
+                print("Fetching proxies...")
+                await self.__broker.find(types=['HTTP'], limit=min_count * 2)
+            else:
+                proxy_address = f'http://{proxy.host}:{proxy.port}'
+                self.__alive_proxies.add(proxy_address)
 
     async def get(self):
-        while len(self.__alive_proxies) == 0:
-            print('waiting for proxies...')
+        while True:
+            if len(self.__alive_proxies) > 0:
+                proxy_address, = random.sample(self.__alive_proxies, 1)
+                return proxy_address
+
+            print('Waiting for proxies...')
             await asyncio.sleep(10)
-        proxy_address, = random.sample(self.__alive_proxies, 1)
-        return proxy_address
+
+            while len(self.__alive_proxies) == 0:
+                print('<!> No proxies available')
+                await asyncio.sleep(10)
 
     async def remove(self, proxy_address):
         with suppress(KeyError):
