@@ -25,7 +25,7 @@ REVIEW_SOURCES = {
 }
 
 SEMAPHORE_DB = asyncio.Semaphore(value=1)
-SEMAPHORE_SCRAPE = asyncio.Semaphore(value=5)
+SEMAPHORE_SCRAPE = asyncio.Semaphore(value=50)
 SEMAPHORE_REVIEW = asyncio.Semaphore(value=5)
 
 session_engine = create_engine('sqlite:///tophealth.db')
@@ -244,8 +244,15 @@ async def populate_reviews(review_data):
             except sqlalchemy.exc.IntegrityError:
                 session.rollback()
 
+SCRAPE_STATISTIC = {
+    'done': 0,
+    'count': 0
+}
+
 
 async def scrape(proxy_manager, source, category, city):
+    SCRAPE_STATISTIC['count'] += 1
+
     async with SEMAPHORE_SCRAPE:
         scraper = SOURCES[source]
 
@@ -274,6 +281,9 @@ async def scrape(proxy_manager, source, category, city):
                 'name': city.name
             }
         )
+
+    SCRAPE_STATISTIC['done'] += 1
+    print(f"<{SCRAPE_STATISTIC['done']}/{SCRAPE_STATISTIC['count']}>")
 
 
 async def scrape_reviews(source, category, city, facilities):
