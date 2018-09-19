@@ -133,6 +133,8 @@ async def main():
                     for city in region['cities']:
                         for service in services:
                             facilities = await api.get_facilities(service['id'], city['id'])
+                            print(facilities)
+
                             if len(facilities) > 0:
                                 await task_factory(lambda **kwargs: scraper(
                                     service=service,
