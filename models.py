@@ -1,6 +1,10 @@
+import asyncio
+
 from sqlalchemy import Column, Sequence, Integer, String, ForeignKey, Text, Float, UniqueConstraint, Table, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 Model = declarative_base()
 
@@ -135,3 +139,23 @@ class Review(Model):
     facility_id = Column(Integer, ForeignKey("facility.id"))
 
     facility = relationship("Facility", back_populates="reviews")
+
+
+class AsyncSession:
+    __session_engine = create_engine('sqlite:///tophealth.db')
+    __session_maker = sessionmaker(bind=__session_engine)
+    __session = __session_maker()
+    __semaphore = asyncio.Semaphore()
+
+    async def __enter(self, *args, **kwargs):
+        await self.__semaphore.__aenter__(*args, **kwargs)
+        return self.__session
+
+    def __aenter__(self):
+        return self.__enter()
+
+    async def __leave(self, *args, **kwargs):
+        await self.__semaphore.__aexit__(*args, **kwargs)
+
+    def __aexit__(self, *args, **kwargs):
+        return self.__leave(*args, **kwargs)

@@ -1,14 +1,13 @@
 import asyncio
 import random
 
-from contextlib import suppress
-
 import proxybroker
 
 
 class AsyncProxyFinder:
     def __init__(self):
-        self.__alive_proxies = set()
+        self.__work_proxies = dict()
+        self.__dead_proxies = set()
         self.__proxies = asyncio.Queue()
         self.__broker = None
         self.__task = None
@@ -25,10 +24,11 @@ class AsyncProxyFinder:
         setattr(getattr(self.__broker, '_resolver'), '_ip_hosts', getattr(resolver.Resolver, '_ip_hosts').copy())
         # ---- PROXYBROKER BUG BYPASS ----
 
-        print("Fetching proxies...")
+        proxy_count = len(self.__work_proxies)
+        print(f"Fetching proxies({proxy_count}/{limit})...")
         asyncio.ensure_future(self.__broker.find(types=['HTTP'], limit=limit))
 
-    async def update_proxies(self, min_count=150):
+    async def update_proxies(self, min_count=10):
         await self.run_proxy_broker(min_count * 2)
         while True:
             try:
@@ -46,15 +46,14 @@ class AsyncProxyFinder:
                 else:
                     proxy = await self.__proxies.get()
                     if proxy is None:
-
-                        while len(self.__alive_proxies) > min_count:
+                        while len(self.__work_proxies) > min_count:
                             await asyncio.sleep(10)
 
                         await self.run_proxy_broker(min_count * 2)
                     else:
                         proxy_address = f'http://{proxy.host}:{proxy.port}'
-                        print("Append proxy:", proxy_address)
-                        self.__alive_proxies.add(proxy_address)
+                        if proxy_address not in self.__work_proxies:
+                            await self.report(proxy_address, failed=False)
 
             except Exception as ex:
                 await self.run_proxy_broker(min_count * 2)
@@ -62,14 +61,24 @@ class AsyncProxyFinder:
 
     async def get(self):
         while True:
-            if len(self.__alive_proxies) > 0:
-                proxy_address, = random.sample(self.__alive_proxies, 1)
+            try:
+                proxy_address, = random.sample(self.__work_proxies.keys(), 1)
                 return proxy_address
-
-            await asyncio.sleep(10)
-            while len(self.__alive_proxies) == 0:
+            except ValueError:
                 await asyncio.sleep(10)
+                while len(self.__work_proxies) == 0:
+                    await asyncio.sleep(10)
 
-    async def remove(self, proxy_address):
-        with suppress(KeyError):
-            self.__alive_proxies.remove(proxy_address)
+    async def report(self, proxy_address, failed: bool):
+        if proxy_address in self.__dead_proxies:
+            return
+
+        cumulative, count = self.__work_proxies.get(proxy_address, (0, 0))
+        cumulative += 1 if not failed else -1
+        count += 1
+
+        self.__work_proxies[proxy_address] = (cumulative, count)
+        if failed and count > 10 and (cumulative / count) < 0.5:
+            print(f"<!> Dead proxy {proxy_address}")
+            del self.__work_proxies[proxy_address]
+            self.__dead_proxies.add(proxy_address)
